@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bizkaibus en tiempo real</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #e8f5e9;
+            color: #1b5e20;
+        }
+        #map {
+            height: 300px;
+            width: 90%;
+            margin: auto;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        #searchContainer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 5px;
+            margin: 10px 0;
+            background: #a5d6a7;
+            padding: 10px;
+            border-radius: 10px;
+        }
+        #searchInput {
+            padding: 8px;
+            border: 2px solid #388e3c;
+            border-radius: 5px;
+            width: 200px;
+        }
+        .button {
+            padding: 8px 15px;
+            background: #2e7d32;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .button:hover {
+            background: #1b5e20;
+        }
+        .navigation {
+            display: none;
+            margin-top: 10px;
+        }
+        .contact {
+            margin-top: 20px;
+            padding: 10px;
+        }
+        .contact h3 {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h2>Bizkaibus en tiempo real</h2>
+    <div id="searchContainer">
+        <input type="text" id="searchInput" placeholder="Buscar por Bus ID o Línea">
+        <button class="button" onclick="searchBus()">Buscar</button>
+    </div>
+    <div class="navigation" id="navigation">
+        <button class="button" onclick="prevBus()">⬅ Anterior</button>
+        <span id="busIndex">1 / 1</span>
+        <button class="button" onclick="nextBus()">Siguiente ➡</button>
+    </div>
+    <div id="map"></div>
+    <div class="contact">
+        <h3>CONTACTO</h3>
+        <p>Desarrollado por Eneko Cantero</p>
+        <p>ecanteroalvarez@gmail.com</p>
+        <p>@enekituss_spotter</p>
+    </div>
+
+    <script>
+        var map = L.map('map').setView([43.28, -2.98], 12);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        
+        var busMarkers = {};
+        var buses = [];
+        var searchResults = [];
+        var currentIndex = 0;
+
+        function updateBuses() {
+            let currentView = map.getCenter();
+            let currentZoom = map.getZoom();
+
+            fetch('https://api.allorigins.win/raw?url=https://ctb-siri.s3.eu-south-2.amazonaws.com/bizkaibus-vehicle-positions.xml')
+                .then(response => response.text())
+                .then(str => new window.DOMParser().parseFromString(str, "text/xml"))
+                .then(data => {
+                    let vehicles = data.getElementsByTagName("VehicleActivity");
+                    buses = [];
+                    
+                    for (let vehicle of vehicles) {
+                        let id = vehicle.getElementsByTagName("VehicleRef")[0].textContent;
+                        let location = vehicle.getElementsByTagName("VehicleLocation")[0];
+                        let lat = parseFloat(location.getElementsByTagName("Latitude")[0].textContent);
+                        let lon = parseFloat(location.getElementsByTagName("Longitude")[0].textContent);
+                        let lineRef = vehicle.getElementsByTagName("VehicleJourneyRef")[0].textContent;
+                        let line = lineRef.match(/trp_A(\d+)/) ? lineRef.match(/trp_A(\d+)/)[1] : "Desconocido";
+                        
+                        buses.push({ id, lat, lon, line });
+                    }
+                    
+                    buses.forEach(bus => {
+                        if (busMarkers[bus.id]) {
+                            busMarkers[bus.id].setLatLng([bus.lat, bus.lon])
+                                .setPopupContent(`Calca: ${bus.id}<br>Línea: ${bus.line}`);
+                        } else {
+                            busMarkers[bus.id] = L.marker([bus.lat, bus.lon]).addTo(map)
+                                .bindPopup(`Calca: ${bus.id}<br>Línea: ${bus.line}`);
+                        }
+                    });
+                    
+                    map.setView(currentView, currentZoom);
+                })
+                .catch(error => console.error('Error obteniendo datos:', error));
+        }
+
+        function searchBus() {
+            let query = document.getElementById("searchInput").value.trim();
+            if (!query) return;
+            
+            searchResults = buses.filter(bus => bus.id === query || bus.line === query);
+            if (searchResults.length > 0) {
+                currentIndex = 0;
+                showBus();
+                document.getElementById("navigation").style.display = searchResults.length > 1 ? "block" : "none";
+            } else {
+                alert("No se encontró el bus o la línea.");
+                document.getElementById("navigation").style.display = "none";
+            }
+        }
+
+        function showBus() {
+            if (searchResults.length > 0) {
+                let bus = searchResults[currentIndex];
+                map.setView([bus.lat, bus.lon], 15);
+                busMarkers[bus.id].openPopup();
+                document.getElementById("busIndex").innerText = `${currentIndex + 1} / ${searchResults.length}`;
+            }
+        }
+
+        function prevBus() {
+            if (currentIndex > 0) {
+                currentIndex--;
+                showBus();
+            }
+        }
+
+        function nextBus() {
+            if (currentIndex < searchResults.length - 1) {
+                currentIndex++;
+                showBus();
+            }
+        }
+
+        updateBuses();
+        setInterval(updateBuses, 5000);
+    </script>
+</body>
+</html>
