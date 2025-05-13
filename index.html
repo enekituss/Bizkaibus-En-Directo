@@ -147,6 +147,7 @@
         var searchResults = [];
         var currentIndex = -1;
         var lastUpdateTime = '';
+        var journeyDestinations = {}; // Variable para almacenar destinos
 
         // Icono para la ubicación del usuario (persona)
         var userIcon = L.icon({
@@ -178,6 +179,29 @@
             }
         }
 
+        // Función para cargar destinos desde el archivo
+        async function loadJourneyDestinations() {
+            let url = "https://raw.githubusercontent.com/enekituss/bizkaibus-data/main/destinos.txt"; // <-- URL del archivo de destinos
+
+            try {
+                let response = await fetch(url);
+                let text = await response.text();
+
+                let lines = text.split("\n");
+                for (let line of lines) {
+                    let parts = line.split(" - ");
+                    if (parts.length === 2) {
+                        let ref = parts[0].trim();
+                        let destino = parts[1].trim();
+                        journeyDestinations[ref] = destino;
+                    }
+                }
+                console.log("Destinos cargados:", journeyDestinations);
+            } catch (error) {
+                console.error("Error al cargar los destinos:", error);
+            }
+        }
+
         async function updateBuses() {
             try {
                 let response = await fetch('https://api.allorigins.win/raw?url=https://ctb-siri.s3.eu-south-2.amazonaws.com/bizkaibus-vehicle-positions.xml');
@@ -199,6 +223,7 @@
                     let stopName = stopNames[stopRef] || "Parada desconocida";
                     let journeyRef = vehicle.getElementsByTagName("VehicleJourneyRef")[0]?.textContent || '';
                     let lineNumber = journeyRef.match(/A(\d{4})/) ? journeyRef.match(/A(\d{4})/)[1] : "Línea desconocida";
+                    let destination = journeyDestinations[journeyRef] || "Destino desconocido";
 
                     let existingBus = buses.find(bus => bus.id === id);
                     if (existingBus) {
@@ -209,12 +234,13 @@
                             updateDetected = true; // Mark that update was detected
                         }
                     } else {
-                        buses.push({ id, lat, lon, stopRef, stopName, lineNumber });
+                        buses.push({ id, lat, lon, stopRef, stopName, lineNumber, destination });
                     }
 
                     let popupContent = 
                         `🚍 <b>Número de Bus:</b> ${id}<br>
                         📍 <b>Línea:</b> ${lineNumber}<br>
+                        🎯 <b>Destino:</b> ${destination}<br>
                         🛑 <b>Próxima parada:</b> ${stopName}<br>
                         🔢 <b>Parada ID:</b> ${stopRef}`;
 
@@ -273,7 +299,7 @@
 
             L.popup()
                 .setLatLng([bus.lat, bus.lon])
-                .setContent(`🚍 <b>Número de Bus:</b> ${bus.id}<br>📍 <b>Línea:</b> ${bus.lineNumber}<br>🛑 <b>Próxima parada:</b> ${bus.stopName}<br>🔢 <b>Parada ID:</b> ${bus.stopRef}`)
+                .setContent(`🚍 <b>Número de Bus:</b> ${bus.id}<br>📍 <b>Línea:</b> ${bus.lineNumber}<br>🎯 <b>Destino:</b> ${bus.destination}<br>🛑 <b>Próxima parada:</b> ${bus.stopName}<br>🔢 <b>Parada ID:</b> ${bus.stopRef}`)
                 .openOn(map);
         }
 
@@ -310,7 +336,7 @@
             }
         }
 
-        loadStopData().then(updateBuses);
+        Promise.all([loadStopData(), loadJourneyDestinations()]).then(updateBuses);
         setInterval(updateBuses, 20000); // Actualizar buses cada 20 segundos
         getUserLocation(); // Mostrar la ubicación del usuario en el mapa
     </script>
