@@ -220,13 +220,6 @@
                     let lineNumber = journeyRef.match(/A(\d{4})/) ? journeyRef.match(/A(\d{4})/)[1] : "Línea desconocida";
                     let destination = journeyDestinations[journeyRef] || "Destino desconocido";
 
-                    console.log(`Bus ${id} - Lat: ${lat} - Lon: ${lon}`); // Depuración para ver las coordenadas
-
-                    if (isNaN(lat) || isNaN(lon)) {
-                        console.error(`Coordenadas inválidas para el bus ${id}: ${lat}, ${lon}`);
-                        continue; // Si las coordenadas no son válidas, saltamos este bus
-                    }
-
                     let existingBus = buses.find(bus => bus.id === id);
                     if (existingBus) {
                         if (existingBus.lat !== lat || existingBus.lon !== lon) {
@@ -239,11 +232,11 @@
                     }
 
                     let popupContent = 
-                        `🚍 <b>Número de Bus:</b> ${id}<br>
+                        🚍 <b>Número de Bus:</b> ${id}<br>
                         📍 <b>Línea:</b> ${lineNumber}<br>
                         🌟 <b>Destino:</b> ${destination}<br>
                         🚩 <b>Próxima parada:</b> ${stopName}<br>
-                        🔹 <b>Parada ID:</b> ${stopRef}`;
+                        🔹 <b>Parada ID:</b> ${stopRef};
 
                     if (busMarkers[id]) {
                         busMarkers[id].setLatLng([lat, lon]).setPopupContent(popupContent);
@@ -254,7 +247,7 @@
 
                 if (updateDetected) {
                     lastUpdateTime = new Date().toLocaleString();
-                    document.getElementById('lastUpdated').textContent = `Última actualización: ${lastUpdateTime}`;
+                    document.getElementById('lastUpdated').textContent = Última actualización: ${lastUpdateTime};
                 }
             } catch (error) {
                 console.error("Error al actualizar los buses:", error);
@@ -282,7 +275,7 @@
                 document.getElementById('searchResults').style.display = 'block';
                 searchResults.forEach((result, index) => {
                     let li = document.createElement('li');
-                    li.textContent = `Bus ${result.id} - Línea ${result.lineNumber}`;
+                    li.textContent = Bus ${result.id} - Línea ${result.lineNumber};
                     li.onclick = () => showBusOnMap(result);
                     resultsList.appendChild(li);
                 });
@@ -297,7 +290,11 @@
         function showBusOnMap(result) {
             let bus = result;
             map.setView([bus.lat, bus.lon], 14);
-            busMarkers[bus.id].openPopup();
+
+            L.popup()
+                .setLatLng([bus.lat, bus.lon])
+                .setContent(🚍 <b>Número de Bus:</b> ${bus.id}<br>📍 <b>Línea:</b> ${bus.lineNumber}<br>🌟 <b>Destino:</b> ${bus.destination}<br>🚩 <b>Próxima parada:</b> ${bus.stopName}<br>🔹 <b>Parada ID:</b> ${bus.stopRef})
+                .openOn(map);
         }
 
         function navigateResults(direction) {
@@ -306,10 +303,10 @@
             } else if (direction === 'prev' && currentIndex > 0) {
                 currentIndex--;
             }
+
+            let result = searchResults[currentIndex];
+            showBusOnMap(result);
             toggleNavigationButtons();
-            if (currentIndex >= 0 && currentIndex < searchResults.length) {
-                showBusOnMap(searchResults[currentIndex]);
-            }
         }
 
         function toggleNavigationButtons() {
@@ -317,9 +314,23 @@
             document.getElementById('nextBtn').disabled = currentIndex >= searchResults.length - 1;
         }
 
-        loadStopData();
-        loadJourneyDestinations();
-        setInterval(updateBuses, 30000); // Actualiza cada 30 segundos
+        function getUserLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    var lat = position.coords.latitude;
+                    var lon = position.coords.longitude;
+
+                    L.marker([lat, lon], { icon: userIcon }).addTo(map).bindPopup("Tu ubicación actual").openPopup();
+                    map.setView([lat, lon], 14);
+                });
+            } else {
+                alert("Geolocalización no disponible");
+            }
+        }
+
+        Promise.all([loadStopData(), loadJourneyDestinations()]).then(updateBuses);
+        setInterval(updateBuses, 20000);
+        getUserLocation();
     </script>
 </body>
 </html>
