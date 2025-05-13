@@ -145,6 +145,8 @@
         var currentIndex = -1;
         var lastUpdateTime = '';
         var journeyDestinations = {};
+        var currentRouteLayer = null;
+        var currentStopsLayer = null;
 
         var userIcon = L.icon({
             iconUrl: 'https://i.imgur.com/kVg4T5Q.png',
@@ -274,17 +276,82 @@
             if (searchResults.length > 0) {
                 document.getElementById('searchResults').style.display = 'block';
                 searchResults.forEach((result, index) => {
-                    let li = document.createElement('li');
-                    li.textContent = `Bus ${result.id} - Línea ${result.lineNumber}`;
-                    li.onclick = () => showBusOnMap(result);
-                    resultsList.appendChild(li);
+                    let listItem = document.createElement('li');
+                    listItem.textContent = `Bus ID: ${result.id} - Línea: ${result.lineNumber}`;
+                    listItem.onclick = () => showBusOnMap(result);
+                    resultsList.appendChild(listItem);
                 });
-
-                currentIndex = -1;
-                toggleNavigationButtons();
             } else {
                 document.getElementById('searchResults').style.display = 'none';
             }
+        }
+
+        function navigateResults(direction) {
+            if (direction === 'next' && currentIndex < searchResults.length - 1) {
+                currentIndex++;
+            } else if (direction === 'prev' && currentIndex > 0) {
+                currentIndex--;
+            }
+
+            if (currentIndex >= 0 && currentIndex < searchResults.length) {
+                showBusOnMap(searchResults[currentIndex]);
+                displayResults();
+            }
+
+            document.getElementById('prevBtn').disabled = currentIndex === 0;
+            document.getElementById('nextBtn').disabled = currentIndex === searchResults.length - 1;
+        }
+
+        async function showRouteAndStops(routeId) {
+            if (currentRouteLayer) {
+                map.removeLayer(currentRouteLayer);
+                currentRouteLayer = null;
+            }
+            if (currentStopsLayer) {
+                map.removeLayer(currentStopsLayer);
+                currentStopsLayer = null;
+            }
+
+            try {
+                const routeResponse = await fetch(`shapes_${routeId}.json`);
+                const routeData = await routeResponse.json();
+                currentRouteLayer = L.polyline(routeData, { color: 'blue' }).addTo(map);
+                map.fitBounds(currentRouteLayer.getBounds());
+
+                const stopsResponse = await fetch(`stops_${routeId}.json`);
+                const stopsData = await stopsResponse.json();
+                currentStopsLayer = L.layerGroup();
+                stopsData.forEach(stop => {
+                    const marker = L.marker([stop.lat, stop.lon]).bindPopup(stop.name);
+                    currentStopsLayer.addLayer(marker);
+                });
+                currentStopsLayer.addTo(map);
+            } catch (error) {
+                console.error('Error al cargar la ruta o las paradas:', error);
+            }
+        }
+
+        function restoreAllBuses() {
+            if (currentRouteLayer) {
+                map.removeLayer(currentRouteLayer);
+                currentRouteLayer = null;
+            }
+            if (currentStopsLayer) {
+                map.removeLayer(currentStopsLayer);
+                currentStopsLayer = null;
+            }
+            buses.forEach(bus => {
+                if (!busMarkers[bus.id]) {
+                    let popupContent = 
+                        `🚍 <b>Número de Bus:</b> ${bus.id}<br>
+                        📍 <b>Línea:</b> ${bus.lineNumber}<br>
+                        🌟 <b>Destino:</b> ${bus.destination}<br>
+                        🚩 <b>Próxima parada:</b> ${bus.stopName}<br>
+                        🔹 <b>Parada ID:</b> ${bus.stopRef}`;
+
+                    busMarkers[bus.id] = L.marker([bus.lat, bus.lon]).addTo(map).bindPopup(popupContent);
+                }
+            });
         }
 
         function showBusOnMap(result) {
@@ -295,42 +362,16 @@
                 .setLatLng([bus.lat, bus.lon])
                 .setContent(`🚍 <b>Número de Bus:</b> ${bus.id}<br>📍 <b>Línea:</b> ${bus.lineNumber}<br>🌟 <b>Destino:</b> ${bus.destination}<br>🚩 <b>Próxima parada:</b> ${bus.stopName}<br>🔹 <b>Parada ID:</b> ${bus.stopRef}`)
                 .openOn(map);
+
+            showRouteAndStops(bus.lineNumber);
         }
 
-        function navigateResults(direction) {
-            if (direction === 'next' && currentIndex < searchResults.length - 1) {
-                currentIndex++;
-            } else if (direction === 'prev' && currentIndex > 0) {
-                currentIndex--;
-            }
-
-            let result = searchResults[currentIndex];
-            showBusOnMap(result);
-            toggleNavigationButtons();
-        }
-
-        function toggleNavigationButtons() {
-            document.getElementById('prevBtn').disabled = currentIndex <= 0;
-            document.getElementById('nextBtn').disabled = currentIndex >= searchResults.length - 1;
-        }
-
-        function getUserLocation() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(function(position) {
-                    var lat = position.coords.latitude;
-                    var lon = position.coords.longitude;
-
-                    L.marker([lat, lon], { icon: userIcon }).addTo(map).bindPopup("Tu ubicación actual").openPopup();
-                    map.setView([lat, lon], 14);
-                });
-            } else {
-                alert("Geolocalización no disponible");
-            }
-        }
-
-        Promise.all([loadStopData(), loadJourneyDestinations()]).then(updateBuses);
-        setInterval(updateBuses, 20000);
-        getUserLocation();
+        // Cargar los datos de las paradas y destinos al inicio
+        loadStopData();
+        loadJourneyDestinations();
+        
+        // Actualizar buses cada 30 segundos
+        setInterval(updateBuses, 30000);
     </script>
 </body>
 </html>
