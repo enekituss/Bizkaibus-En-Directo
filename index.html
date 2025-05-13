@@ -103,6 +103,27 @@
             color: #388e3c;
             margin-top: 15px;
         }
+        .itinerary {
+            margin-top: 10px;
+            display: none;
+            background-color: #f1f1f1;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .itinerary ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        .itinerary li {
+            padding: 5px 0;
+        }
+        .itinerary li.passed {
+            text-decoration: line-through;
+            font-style: italic;
+        }
+        .itinerary li.next {
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -231,12 +252,19 @@
                         buses.push({ id, lat, lon, stopRef, stopName, lineNumber, destination });
                     }
 
-                    let popupContent = 
+                    let popupContent = `
                         🚍 <b>Número de Bus:</b> ${id}<br>
                         📍 <b>Línea:</b> ${lineNumber}<br>
                         🌟 <b>Destino:</b> ${destination}<br>
                         🚩 <b>Próxima parada:</b> ${stopName}<br>
-                        🔹 <b>Parada ID:</b> ${stopRef};
+                        🔹 <b>Parada ID:</b> ${stopRef}<br>
+                        <div class="itinerary" id="itinerary-${id}">
+                            <h4>Itinerario:</h4>
+                            <ul>
+                                <!-- Las paradas se cargarán aquí -->
+                            </ul>
+                        </div>
+                    `;
 
                     if (busMarkers[id]) {
                         busMarkers[id].setLatLng([lat, lon]).setPopupContent(popupContent);
@@ -247,7 +275,7 @@
 
                 if (updateDetected) {
                     lastUpdateTime = new Date().toLocaleString();
-                    document.getElementById('lastUpdated').textContent = Última actualización: ${lastUpdateTime};
+                    document.getElementById('lastUpdated').textContent = `Última actualización: ${lastUpdateTime}`;
                 }
             } catch (error) {
                 console.error("Error al actualizar los buses:", error);
@@ -275,7 +303,7 @@
                 document.getElementById('searchResults').style.display = 'block';
                 searchResults.forEach((result, index) => {
                     let li = document.createElement('li');
-                    li.textContent = Bus ${result.id} - Línea ${result.lineNumber};
+                    li.textContent = `Bus ${result.id} - Línea ${result.lineNumber}`;
                     li.onclick = () => showBusOnMap(result);
                     resultsList.appendChild(li);
                 });
@@ -291,46 +319,56 @@
             let bus = result;
             map.setView([bus.lat, bus.lon], 14);
 
+            let itinerary = document.getElementById(`itinerary-${bus.id}`);
+            if (itinerary) {
+                itinerary.style.display = 'block';
+                updateItinerary(bus);
+            }
+
             L.popup()
                 .setLatLng([bus.lat, bus.lon])
-                .setContent(🚍 <b>Número de Bus:</b> ${bus.id}<br>📍 <b>Línea:</b> ${bus.lineNumber}<br>🌟 <b>Destino:</b> ${bus.destination}<br>🚩 <b>Próxima parada:</b> ${bus.stopName}<br>🔹 <b>Parada ID:</b> ${bus.stopRef})
+                .setContent(`
+                    🚍 <b>Número de Bus:</b> ${bus.id}<br>
+                    📍 <b>Línea:</b> ${bus.lineNumber}<br>
+                    🌟 <b>Destino:</b> ${bus.destination}<br>
+                    🚩 <b>Próxima parada:</b> ${bus.stopName}<br>
+                    🔹 <b>Parada ID:</b> ${bus.stopRef}
+                    <br><br>
+                    <button onclick="toggleItinerary('${bus.id}')">Ver itinerario</button>
+                `)
                 .openOn(map);
         }
 
-        function navigateResults(direction) {
-            if (direction === 'next' && currentIndex < searchResults.length - 1) {
-                currentIndex++;
-            } else if (direction === 'prev' && currentIndex > 0) {
-                currentIndex--;
-            }
-
-            let result = searchResults[currentIndex];
-            showBusOnMap(result);
-            toggleNavigationButtons();
-        }
-
-        function toggleNavigationButtons() {
-            document.getElementById('prevBtn').disabled = currentIndex <= 0;
-            document.getElementById('nextBtn').disabled = currentIndex >= searchResults.length - 1;
-        }
-
-        function getUserLocation() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(function(position) {
-                    var lat = position.coords.latitude;
-                    var lon = position.coords.longitude;
-
-                    L.marker([lat, lon], { icon: userIcon }).addTo(map).bindPopup("Tu ubicación actual").openPopup();
-                    map.setView([lat, lon], 14);
-                });
+        function toggleItinerary(busId) {
+            let itinerary = document.getElementById(`itinerary-${busId}`);
+            if (itinerary.style.display === 'block') {
+                itinerary.style.display = 'none';
             } else {
-                alert("Geolocalización no disponible");
+                itinerary.style.display = 'block';
             }
+        }
+
+        function updateItinerary(bus) {
+            let itinerary = document.getElementById(`itinerary-${bus.id}`).querySelector('ul');
+            itinerary.innerHTML = '';
+
+            // Aquí se procesan las paradas y se añaden al itinerario
+            let stops = bus.stops; // Asumiendo que 'bus' tiene un array 'stops'
+            stops.forEach((stop, index) => {
+                let li = document.createElement('li');
+                li.textContent = stop.name;
+                if (stop.passed) {
+                    li.classList.add('passed');
+                }
+                if (stop.isNext) {
+                    li.classList.add('next');
+                }
+                itinerary.appendChild(li);
+            });
         }
 
         Promise.all([loadStopData(), loadJourneyDestinations()]).then(updateBuses);
         setInterval(updateBuses, 20000);
-        getUserLocation();
     </script>
 </body>
 </html>
