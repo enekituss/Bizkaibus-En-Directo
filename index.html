@@ -108,6 +108,7 @@
 <body>
     <h2>Bizkaibus en tiempo real 🚍</h2>
 
+    <!-- Cuadro de búsqueda -->
     <div id="searchContainer">
         <input type="text" id="searchInput" placeholder="Buscar por Bus ID o Línea" oninput="searchStops()" />
         <button class="button" onclick="searchBus()">Buscar</button>
@@ -123,6 +124,7 @@
 
     <div id="map"></div>
 
+    <!-- Información de contacto -->
     <div class="contact-info">
         <h3>Contacto</h3>
         <p><b>Desarrollado por Eneko Cantero</b></p>
@@ -130,6 +132,7 @@
         <p><b>Instagram:</b> <a href="https://instagram.com/enekituss_spotter" target="_blank">@enekituss_spotter</a></p>
     </div>
 
+    <!-- Última actualización -->
     <div class="last-updated" id="lastUpdated">Última actualización: N/A</div>
 
     <script>
@@ -145,9 +148,10 @@
         var currentIndex = -1;
         var lastUpdateTime = '';
         var journeyDestinations = {};
+        var lastFeedTimestamp = '';
 
-        var userIcon = L.icon({
-            iconUrl: 'https://i.imgur.com/kVg4T5Q.png',
+        var busIcon = L.icon({
+            iconUrl: 'https://i.imgur.com/Ek3iN8B.png', // Icono de bus verde
             iconSize: [30, 30],
             iconAnchor: [15, 30],
             popupAnchor: [0, -30]
@@ -155,11 +159,9 @@
 
         async function loadStopData() {
             let url = "https://raw.githubusercontent.com/enekituss/bizkaibus-data/main/lista%20paradas%20ID%20chatgpt.txt";
-
             try {
                 let response = await fetch(url);
                 let text = await response.text();
-
                 let lines = text.split("\n");
                 for (let line of lines) {
                     let parts = line.split(" - ");
@@ -169,7 +171,6 @@
                         stopNames[stopId] = stopName;
                     }
                 }
-                console.log("Paradas cargadas:", stopNames);
             } catch (error) {
                 console.error("Error al cargar las paradas:", error);
             }
@@ -177,23 +178,18 @@
 
         async function loadJourneyDestinations() {
             let url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSJxVYnmoh5jbZ5HRcJToHapoPewZIlrdSEDdlvOH1H_mWKwme1FiTobj1hIrolKw/pub?output=csv";
-
             try {
                 let response = await fetch(url);
                 let text = await response.text();
-
                 let lines = text.split("\n");
                 for (let line of lines) {
-                    let parts = line.split(",");
-                    if (parts.length >= 2) {
-                        let ref = parts[0].trim();
-                        let destino = parts[1].trim();
-                        journeyDestinations[ref] = destino;
+                    let [ref, destino] = line.split(",");
+                    if (ref && destino) {
+                        journeyDestinations[ref.trim()] = destino.trim();
                     }
                 }
-                console.log("Destinos cargados desde CSV:", journeyDestinations);
             } catch (error) {
-                console.error("Error al cargar los destinos:", error);
+                console.error("Error al cargar destinos:", error);
             }
         }
 
@@ -205,7 +201,11 @@
                 let xmlDoc = parser.parseFromString(text, 'text/xml');
                 let vehicles = xmlDoc.getElementsByTagName("VehicleActivity");
 
-                let updateDetected = false;
+                let newTimestamp = xmlDoc.getElementsByTagName("RecordedAtTime")[0]?.textContent || '';
+                if (newTimestamp && newTimestamp !== lastFeedTimestamp) {
+                    lastFeedTimestamp = newTimestamp;
+                    document.getElementById('lastUpdated').textContent = `Última actualización: ${new Date(newTimestamp).toLocaleString()}`;
+                }
 
                 buses = [];
 
@@ -220,34 +220,20 @@
                     let lineNumber = journeyRef.match(/A(\d{4})/) ? journeyRef.match(/A(\d{4})/)[1] : "Línea desconocida";
                     let destination = journeyDestinations[journeyRef] || "Destino desconocido";
 
-                    let existingBus = buses.find(bus => bus.id === id);
-                    if (existingBus) {
-                        if (existingBus.lat !== lat || existingBus.lon !== lon) {
-                            existingBus.lat = lat;
-                            existingBus.lon = lon;
-                            updateDetected = true;
-                        }
-                    } else {
-                        buses.push({ id, lat, lon, stopRef, stopName, lineNumber, destination });
-                    }
+                    buses.push({ id, lat, lon, stopRef, stopName, lineNumber, destination });
 
-                    let popupContent = 
-                        `🚍 <b>Número de Bus:</b> ${id}<br>
-                        📍 <b>Línea:</b> ${lineNumber}<br>
-                        🌟 <b>Destino:</b> ${destination}<br>
-                        🚩 <b>Próxima parada:</b> ${stopName}<br>
-                        🔹 <b>Parada ID:</b> ${stopRef}`;
+                    let popupContent =
+                        `🚍 <b>Número de Bus:</b> ${id}<br>` +
+                        `📍 <b>Línea:</b> ${lineNumber}<br>` +
+                        `🎯 <b>Destino:</b> ${destination}<br>` +
+                        `🛑 <b>Próxima parada:</b> ${stopName}<br>` +
+                        `🔢 <b>Parada ID:</b> ${stopRef}`;
 
                     if (busMarkers[id]) {
                         busMarkers[id].setLatLng([lat, lon]).setPopupContent(popupContent);
                     } else {
-                        busMarkers[id] = L.marker([lat, lon]).addTo(map).bindPopup(popupContent);
+                        busMarkers[id] = L.marker([lat, lon], { icon: busIcon }).addTo(map).bindPopup(popupContent);
                     }
-                }
-
-                if (updateDetected) {
-                    lastUpdateTime = new Date().toLocaleString();
-                    document.getElementById('lastUpdated').textContent = `Última actualización: ${lastUpdateTime}`;
                 }
             } catch (error) {
                 console.error("Error al actualizar los buses:", error);
@@ -256,21 +242,16 @@
 
         function searchStops() {
             let query = document.getElementById('searchInput').value.toLowerCase();
-            searchResults = [];
-
-            for (let bus of buses) {
-                if (bus.id.toLowerCase().includes(query) || bus.lineNumber.toLowerCase().includes(query)) {
-                    searchResults.push(bus);
-                }
-            }
-
+            searchResults = buses.filter(bus =>
+                bus.id.toLowerCase().includes(query) ||
+                bus.lineNumber.toLowerCase().includes(query)
+            );
             displayResults();
         }
 
         function displayResults() {
             let resultsList = document.getElementById('resultsList');
             resultsList.innerHTML = '';
-
             if (searchResults.length > 0) {
                 document.getElementById('searchResults').style.display = 'block';
                 searchResults.forEach((result, index) => {
@@ -279,7 +260,6 @@
                     li.onclick = () => showBusOnMap(result);
                     resultsList.appendChild(li);
                 });
-
                 currentIndex = -1;
                 toggleNavigationButtons();
             } else {
@@ -288,12 +268,10 @@
         }
 
         function showBusOnMap(result) {
-            let bus = result;
-            map.setView([bus.lat, bus.lon], 14);
-
+            map.setView([result.lat, result.lon], 14);
             L.popup()
-                .setLatLng([bus.lat, bus.lon])
-                .setContent(`🚍 <b>Número de Bus:</b> ${bus.id}<br>📍 <b>Línea:</b> ${bus.lineNumber}<br>🌟 <b>Destino:</b> ${bus.destination}<br>🚩 <b>Próxima parada:</b> ${bus.stopName}<br>🔹 <b>Parada ID:</b> ${bus.stopRef}`)
+                .setLatLng([result.lat, result.lon])
+                .setContent(`🚍 <b>Número de Bus:</b> ${result.id}<br>📍 <b>Línea:</b> ${result.lineNumber}<br>🎯 <b>Destino:</b> ${result.destination}<br>🛑 <b>Próxima parada:</b> ${result.stopName}<br>🔢 <b>Parada ID:</b> ${result.stopRef}`)
                 .openOn(map);
         }
 
@@ -303,9 +281,7 @@
             } else if (direction === 'prev' && currentIndex > 0) {
                 currentIndex--;
             }
-
-            let result = searchResults[currentIndex];
-            showBusOnMap(result);
+            showBusOnMap(searchResults[currentIndex]);
             toggleNavigationButtons();
         }
 
@@ -316,11 +292,10 @@
 
         function getUserLocation() {
             if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(function(position) {
-                    var lat = position.coords.latitude;
-                    var lon = position.coords.longitude;
-
-                    L.marker([lat, lon], { icon: userIcon }).addTo(map).bindPopup("Tu ubicación actual").openPopup();
+                navigator.geolocation.getCurrentPosition(position => {
+                    let lat = position.coords.latitude;
+                    let lon = position.coords.longitude;
+                    L.marker([lat, lon]).addTo(map).bindPopup("Tu ubicación actual").openPopup();
                     map.setView([lat, lon], 14);
                 });
             } else {
@@ -328,8 +303,10 @@
             }
         }
 
-        Promise.all([loadStopData(), loadJourneyDestinations()]).then(updateBuses);
-        setInterval(updateBuses, 20000);
+        Promise.all([loadStopData(), loadJourneyDestinations()]).then(() => {
+            updateBuses();
+            setInterval(updateBuses, 15000);
+        });
         getUserLocation();
     </script>
 </body>
