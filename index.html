@@ -234,9 +234,9 @@
                     let popupContent = 
                         `🚍 <b>Número de Bus:</b> ${id}<br>
                         📍 <b>Línea:</b> ${lineNumber}<br>
-                        🌟 <b>Destino:</b> ${destination}<br>
-                        🚩 <b>Próxima parada:</b> ${stopName}<br>
-                        🔹 <b>Parada ID:</b> ${stopRef}`;
+                        ➡ <b>Destino:</b> ${destination}<br>
+                        🚏 <b>Próxima parada:</b> ${stopName}<br>
+                        🆔 <b>Parada ID:</b> ${stopRef}`;
 
                     if (busMarkers[id]) {
                         busMarkers[id].setLatLng([lat, lon]).setPopupContent(popupContent);
