@@ -108,7 +108,6 @@
 <body>
     <h2>Bizkaibus en tiempo real 🚍</h2>
 
-    <!-- Cuadro de búsqueda -->
     <div id="searchContainer">
         <input type="text" id="searchInput" placeholder="Buscar por Bus ID o Línea" oninput="searchStops()" />
         <button class="button" onclick="searchBus()">Buscar</button>
@@ -124,7 +123,6 @@
 
     <div id="map"></div>
 
-    <!-- Información de contacto -->
     <div class="contact-info">
         <h3>Contacto</h3>
         <p><b>Desarrollado por Eneko Cantero</b></p>
@@ -132,7 +130,6 @@
         <p><b>Instagram:</b> <a href="https://instagram.com/enekituss_spotter" target="_blank">@enekituss_spotter</a></p>
     </div>
 
-    <!-- Última actualización -->
     <div class="last-updated" id="lastUpdated">Última actualización: N/A</div>
 
     <script>
@@ -147,14 +144,13 @@
         var searchResults = [];
         var currentIndex = -1;
         var lastUpdateTime = '';
-        var journeyDestinations = {}; // Variable para almacenar destinos
+        var journeyDestinations = {};
 
-        // Icono para la ubicación del usuario (persona)
         var userIcon = L.icon({
-            iconUrl: 'https://i.imgur.com/kVg4T5Q.png', // URL del icono de persona
-            iconSize: [30, 30], // Tamaño del icono
-            iconAnchor: [15, 30], // Ancla del icono
-            popupAnchor: [0, -30] // Donde aparecerá el popup
+            iconUrl: 'https://i.imgur.com/kVg4T5Q.png',
+            iconSize: [30, 30],
+            iconAnchor: [15, 30],
+            popupAnchor: [0, -30]
         });
 
         async function loadStopData() {
@@ -179,9 +175,8 @@
             }
         }
 
-        // Función para cargar destinos desde el archivo
         async function loadJourneyDestinations() {
-            let url = "https://raw.githubusercontent.com/enekituss/bizkaibus-data/main/destinos.txt"; // <-- URL del archivo de destinos
+            let url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSJxVYnmoh5jbZ5HRcJToHapoPewZIlrdSEDdlvOH1H_mWKwme1FiTobj1hIrolKw/pub?output=csv";
 
             try {
                 let response = await fetch(url);
@@ -189,14 +184,14 @@
 
                 let lines = text.split("\n");
                 for (let line of lines) {
-                    let parts = line.split(" - ");
-                    if (parts.length === 2) {
+                    let parts = line.split(",");
+                    if (parts.length >= 2) {
                         let ref = parts[0].trim();
                         let destino = parts[1].trim();
                         journeyDestinations[ref] = destino;
                     }
                 }
-                console.log("Destinos cargados:", journeyDestinations);
+                console.log("Destinos cargados desde CSV:", journeyDestinations);
             } catch (error) {
                 console.error("Error al cargar los destinos:", error);
             }
@@ -212,7 +207,7 @@
 
                 let updateDetected = false;
 
-                buses = []; // Reset buses data
+                buses = [];
 
                 for (let vehicle of vehicles) {
                     let id = vehicle.getElementsByTagName("VehicleRef")[0].textContent;
@@ -227,11 +222,10 @@
 
                     let existingBus = buses.find(bus => bus.id === id);
                     if (existingBus) {
-                        // Compare positions
                         if (existingBus.lat !== lat || existingBus.lon !== lon) {
                             existingBus.lat = lat;
                             existingBus.lon = lon;
-                            updateDetected = true; // Mark that update was detected
+                            updateDetected = true;
                         }
                     } else {
                         buses.push({ id, lat, lon, stopRef, stopName, lineNumber, destination });
@@ -240,9 +234,9 @@
                     let popupContent = 
                         `🚍 <b>Número de Bus:</b> ${id}<br>
                         📍 <b>Línea:</b> ${lineNumber}<br>
-                        🎯 <b>Destino:</b> ${destination}<br>
-                        🛑 <b>Próxima parada:</b> ${stopName}<br>
-                        🔢 <b>Parada ID:</b> ${stopRef}`;
+                        🌟 <b>Destino:</b> ${destination}<br>
+                        🚩 <b>Próxima parada:</b> ${stopName}<br>
+                        🔹 <b>Parada ID:</b> ${stopRef}`;
 
                     if (busMarkers[id]) {
                         busMarkers[id].setLatLng([lat, lon]).setPopupContent(popupContent);
@@ -299,7 +293,7 @@
 
             L.popup()
                 .setLatLng([bus.lat, bus.lon])
-                .setContent(`🚍 <b>Número de Bus:</b> ${bus.id}<br>📍 <b>Línea:</b> ${bus.lineNumber}<br>🎯 <b>Destino:</b> ${bus.destination}<br>🛑 <b>Próxima parada:</b> ${bus.stopName}<br>🔢 <b>Parada ID:</b> ${bus.stopRef}`)
+                .setContent(`🚍 <b>Número de Bus:</b> ${bus.id}<br>📍 <b>Línea:</b> ${bus.lineNumber}<br>🌟 <b>Destino:</b> ${bus.destination}<br>🚩 <b>Próxima parada:</b> ${bus.stopName}<br>🔹 <b>Parada ID:</b> ${bus.stopRef}`)
                 .openOn(map);
         }
 
@@ -320,16 +314,14 @@
             document.getElementById('nextBtn').disabled = currentIndex >= searchResults.length - 1;
         }
 
-        // Función para obtener la posición del usuario
         function getUserLocation() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(function(position) {
                     var lat = position.coords.latitude;
                     var lon = position.coords.longitude;
 
-                    // Mostrar al usuario en el mapa
                     L.marker([lat, lon], { icon: userIcon }).addTo(map).bindPopup("Tu ubicación actual").openPopup();
-                    map.setView([lat, lon], 14); // Centrar el mapa en la ubicación del usuario
+                    map.setView([lat, lon], 14);
                 });
             } else {
                 alert("Geolocalización no disponible");
@@ -337,8 +329,8 @@
         }
 
         Promise.all([loadStopData(), loadJourneyDestinations()]).then(updateBuses);
-        setInterval(updateBuses, 20000); // Actualizar buses cada 20 segundos
-        getUserLocation(); // Mostrar la ubicación del usuario en el mapa
+        setInterval(updateBuses, 20000);
+        getUserLocation();
     </script>
 </body>
 </html>
